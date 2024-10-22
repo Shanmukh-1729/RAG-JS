@@ -5,7 +5,7 @@ const fs = require('fs');
 const pdfParse = require('pdf-parse');
 const RecursiveCharacterTextSplitter = require('@langchain/textsplitters').RecursiveCharacterTextSplitter;
 const axios = require('axios');
-const {Pinecone} = require('@pinecone-database/pinecone');
+const { Pinecone } = require('@pinecone-database/pinecone');
 const { error } = require('console');
 
 // import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
@@ -13,22 +13,22 @@ const { error } = require('console');
 const extractTextFromPDF = async (pdfPath) => {
     // Read the PDF file
     const dataBuffer = fs.readFileSync(pdfPath);
-  
+
     try {
-      // Parse the PDF file
-      const data = await pdfParse(dataBuffer);
-      // Return extracted text
-      return data.text;
+        // Parse the PDF file
+        const data = await pdfParse(dataBuffer);
+        // Return extracted text
+        return data.text;
     } catch (error) {
-      console.error('Error parsing PDF:', error);
-      throw new Error('Failed to extract text from PDF');
+        console.error('Error parsing PDF:', error);
+        throw new Error('Failed to extract text from PDF');
     }
 };
 
-const textSplitter = async (textDict,chunk_size=6000,overlap=500) => {
+const textSplitter = async (textDict, chunk_size = 6000, overlap = 500) => {
     const finalChunks = []
-    for (const key in textDict){
-        if (textDict.hasOwnProperty(key)){
+    for (const key in textDict) {
+        if (textDict.hasOwnProperty(key)) {
             const splitter = new RecursiveCharacterTextSplitter({
                 chunkSize: chunk_size,
                 chunkOverlap: overlap,
@@ -56,34 +56,34 @@ const deleteFolderFiles = async (folderPath) => {
     });
 }
 
-const embedAzureOpenAI = async (text)=>{
-    try{
+const embedAzureOpenAI = async (text) => {
+    try {
         const response = await axios.post(
             `${process.env.AZURE_OPENAI_ENDPOINT}openai/deployments/${process.env.AZURE_OPENAI_EMBED_MODEL}/embeddings?api-version=2023-05-15`,
-            {input:text},
+            { input: text },
             {
-            headers:{
-                'Content-Type':'application/json',
-                'api-key':process.env.AZURE_OPENAI_API_KEY
-            }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'api-key': process.env.AZURE_OPENAI_API_KEY
+                }
             }
         )
         return response.data.data[0].embedding;
-    }catch (error) {
+    } catch (error) {
         console.error('Error Creating embeddings:', error);
         throw new Error('Failed to create embeddings');
-      }
+    }
 }
 
-const upsertToPinecone = async (embedding,pdfName,text,indx) => {
+const upsertToPinecone = async (embedding, pdfName, text, indx) => {
     const upsertRequest = {
-        vectors:[{
-            pdfName:pdfName,
-            values:embedding,
-            text:text
+        vectors: [{
+            pdfName: pdfName,
+            values: embedding,
+            text: text
         }]
     }
-    await indx.upsert({upsertRequest});
+    await indx.upsert({ upsertRequest });
 }
 
 const uploadTextToPinceCone = async (chunks) => {
@@ -97,9 +97,9 @@ const uploadTextToPinceCone = async (chunks) => {
 
     indices = pc.listIndexes().indexes;
 
-    if(indices){
-        for(let i =0;i<indices.length;i++){
-            if(indices[i].name === indxName){
+    if (indices) {
+        for (let i = 0; i < indices.length; i++) {
+            if (indices[i].name === indxName) {
                 await pc.deleteIndex(process.env.PINECONE_INDEX_NAME);
                 break;
             }
@@ -109,37 +109,37 @@ const uploadTextToPinceCone = async (chunks) => {
         name: process.env.PINECONE_INDEX_NAME,
         dimension: 1536,
         spec: {
-          serverless: {
-            cloud: 'aws',
-            region: 'us-east-1',
-          },
+            serverless: {
+                cloud: 'aws',
+                region: 'us-east-1',
+            },
         },
         waitUntilReady: true,
     });
-    
+
     const indx = pc.index(indxName);
 
-    for(let i =0;i<chunks.length;i++){
-        const {pageContent,filename} = chunks[i];
+    for (let i = 0; i < chunks.length; i++) {
+        const { pageContent, filename } = chunks[i];
         const embedding = await embedAzureOpenAI(pageContent);
-        await upsertToPinecone(embedding,filename,pageContent,indx)
+        await upsertToPinecone(embedding, filename, pageContent, indx)
     }
     console.log('Files are uploaded to pinecone')
 }
 
 const saveLocalJson = async (chunks) => {
     const finalData = []
-    for(let i =0;i<chunks.length;i++){
-        const {pageContent,metadata} = chunks[i];
-        const embedding = await embedAzureOpenAI(pageContent); 
+    for (let i = 0; i < chunks.length; i++) {
+        const { pageContent, metadata } = chunks[i];
+        const embedding = await embedAzureOpenAI(pageContent);
         finalData.push({
-            'filename':metadata.filename,
-            'text':pageContent,
-            'embedding':embedding
+            'filename': metadata.filename,
+            'text': pageContent,
+            'embedding': embedding
         })
     }
     const vectorIndexes = {
-        "index":finalData
+        "index": finalData
     }
     // console.log(finalData[0]);
     // Convert dictionary to JSON string
@@ -159,11 +159,11 @@ const saveLocalJson = async (chunks) => {
     console.log('Files are locally saved');
 };
 
-const readJson = async(filePath) =>{
+const readJson = async (filePath) => {
     try {
         // Read the JSON file
         const data = await fs.promises.readFile(filePath, 'utf8');
-        
+
         // Parse the JSON data
         const jsonData = JSON.parse(data);
         return jsonData.index; // Return the desired property
@@ -180,11 +180,11 @@ const cosineSimilarity = (vecA, vecB) => {
     return dotProduct / (normA * normB);
 };
 
-const fetchTopK = async (queryEmbedding,topK) =>{
- 
+const fetchTopK = async (queryEmbedding, topK) => {
+
     const filePath = './vectorChunks.json';
     vectorIndexes = await readJson(filePath);
-    if(!vectorIndexes){
+    if (!vectorIndexes) {
         throw new Error('Failed to open vectore indexes!');
     }
 
@@ -203,32 +203,32 @@ const fetchTopK = async (queryEmbedding,topK) =>{
 
 const chatModelRequest = async (prompt) => {
     const endpoint = `${process.env.AZURE_OPENAI_ENDPOINT}openai/deployments/${process.env.AZURE_OPENAI_CHAT_MODEL}/chat/completions?api-version=2023-05-15`;
-    const apiKey =  process.env.AZURE_OPENAI_API_KEY;
-    try{
+    const apiKey = process.env.AZURE_OPENAI_API_KEY;
+    try {
         const response = await axios.post(
             endpoint,
             {
-                messages :[{role:'user',content:prompt}],
-                temperature : 0.2
-            },{
-                headers:{
-                    'Content-Type':'application/json',
-                    'api-key':apiKey,
-                }
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.2
+            }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': apiKey,
             }
+        }
         );
         return response.data.choices[0].message.content;
-    }catch(error){
-        console.error('Error Calling Azure OpenAI:',error.response ? error.response.data : error.message);
+    } catch (error) {
+        console.error('Error Calling Azure OpenAI:', error.response ? error.response.data : error.message);
         throw error;
     }
 }
 
-const answerUserQuery = async (userQuery,topChunks) => {
-    
+const answerUserQuery = async (userQuery, topChunks) => {
+
     let contexts = '';
     let filenames = [];
-    topChunks.forEach(chunk=>{
+    topChunks.forEach(chunk => {
         if (chunk.text) {
             contexts += chunk.text + "\n\n"; // Concatenate text with new lines
         }
@@ -250,7 +250,15 @@ const answerUserQuery = async (userQuery,topChunks) => {
     `
     const answer = await chatModelRequest(prompt);
     // console.log(answer,filenames);
-    return {answer,filenames,topChunks}; 
+    return { answer, filenames, topChunks };
 }
 
-module.exports = {extractTextFromPDF,textSplitter,deleteFolderFiles,uploadTextToPinceCone,saveLocalJson,fetchTopK,embedAzureOpenAI,answerUserQuery}
+const generateSummary = async (textData) => {
+    const prompt = `Give a brief summary of the below text extracted from a pdf document. Write it in a way that it represents the whole summary of the document.
+        Text - <<${textData}>>
+        Give point wise summary with well formatted structure.`
+    const summary = await chatModelRequest(prompt);
+    return summary;
+}
+
+module.exports = { extractTextFromPDF, textSplitter, deleteFolderFiles, uploadTextToPinceCone, saveLocalJson, fetchTopK, embedAzureOpenAI, answerUserQuery, generateSummary }

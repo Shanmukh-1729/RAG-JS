@@ -1,21 +1,21 @@
 const path = require('path');
 const fs = require('fs');
-const {extractTextFromPDF,textSplitter,deleteFolderFiles,saveLocalJson,fetchTopK,embedAzureOpenAI,answerUserQuery} = require('../utils/textHandler')
+const { extractTextFromPDF, textSplitter, deleteFolderFiles, saveLocalJson, fetchTopK, embedAzureOpenAI, answerUserQuery, generateSummary } = require('../utils/textHandler')
 
 // Controller to answer user questions based on the pinecone index
-const RAGchatbot = async (req,res) => {
-    const {question} = req.body;
-    if (!question){
-        return res.status(400).json({error:"Cannot have a null question."})
+const RAGchatbot = async (req, res) => {
+    const { question } = req.body;
+    if (!question) {
+        return res.status(400).json({ error: "Cannot have a null question." })
     }
     queryEmbedding = await embedAzureOpenAI(question);
-    topKChunks = await fetchTopK(queryEmbedding,10);
-    const {answer,filenames,topChunks} = await answerUserQuery(question,topKChunks);
+    topKChunks = await fetchTopK(queryEmbedding, 10);
+    const { answer, filenames, topChunks } = await answerUserQuery(question, topKChunks);
     // console.log(`User Request Question : ${question}`)
     res.send({
-        "answer":answer,
-        "filenames":filenames,
-        "topChunks":topChunks
+        "answer": answer,
+        "filenames": filenames,
+        "topChunks": topChunks
     })
 }
 
@@ -27,16 +27,18 @@ const uploadUserFile = async (req, res) => {
         }
 
         const fileContents = {};
+        const fileSummaries = {};
         for (const file of req.files) {
             // Store original filename and create a new file path
             const originalFilename = file.originalname; // This retains the original filename
             const filePath = path.join(__dirname, '../uploads/', originalFilename);
-            
+
             // Move the uploaded file to the desired location with the original name
             await fs.promises.rename(file.path, filePath);
-            
+
             // Extract text from the PDF using the original filename
             fileContents[originalFilename] = await extractTextFromPDF(filePath);
+            fileSummaries[originalFilename] = await generateSummary(fileContents[originalFilename]);
         }
 
         const chunks = await textSplitter(fileContents, 6000, 500);
@@ -45,12 +47,12 @@ const uploadUserFile = async (req, res) => {
 
         await deleteFolderFiles(path.join(__dirname, '../uploads/'));
         console.log('Files Deleted Successfully');
-        
-        res.status(200).json({ message: 'Files processed', chunks: chunks });
+
+        res.status(200).json({ message: 'Files processed Succesfully!', summaries:fileSummaries, chunks: chunks });
     } catch (error) {
         console.error('Error processing files:', error);
         res.status(500).json({ error: 'Error processing files' });
     }
 };
 
-module.exports = {RAGchatbot,uploadUserFile}
+module.exports = { RAGchatbot, uploadUserFile }
