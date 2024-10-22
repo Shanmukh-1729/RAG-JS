@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { extractTextFromPDF, textSplitter, deleteFolderFiles, saveLocalJson, fetchTopK, embedAzureOpenAI, answerUserQuery, generateSummary } = require('../utils/textHandler')
+const { extractTextFromPDF, extractText, textSplitter, deleteFolderFiles, saveLocalJson, fetchTopK, embedAzureOpenAI, answerUserQuery, generateSummary } = require('../utils/textHandler')
 
 // Controller to answer user questions based on the pinecone index
 const RAGchatbot = async (req, res) => {
@@ -9,13 +9,13 @@ const RAGchatbot = async (req, res) => {
         return res.status(400).json({ error: "Cannot have a null question." })
     }
     queryEmbedding = await embedAzureOpenAI(question);
-    topKChunks = await fetchTopK(queryEmbedding, 10);
+    topKChunks = await fetchTopK(queryEmbedding, topK = 10,minSimmilarity=0.7);
     const { answer, filenames, topChunks } = await answerUserQuery(question, topKChunks);
     // console.log(`User Request Question : ${question}`)
     res.send({
         "answer": answer,
         "filenames": filenames,
-        "topChunks": topChunks
+        // "topChunks": topChunks
     })
 }
 
@@ -37,7 +37,7 @@ const uploadUserFile = async (req, res) => {
             await fs.promises.rename(file.path, filePath);
 
             // Extract text from the PDF using the original filename
-            fileContents[originalFilename] = await extractTextFromPDF(filePath);
+            fileContents[originalFilename] = await extractText(filePath);
             fileSummaries[originalFilename] = await generateSummary(fileContents[originalFilename]);
         }
 

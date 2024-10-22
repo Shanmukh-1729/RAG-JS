@@ -7,6 +7,8 @@ const RecursiveCharacterTextSplitter = require('@langchain/textsplitters').Recur
 const axios = require('axios');
 const { Pinecone } = require('@pinecone-database/pinecone');
 const { error } = require('console');
+const mammoth = require('mammoth');
+const textract = require('textract');
 
 // import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 
@@ -24,6 +26,42 @@ const extractTextFromPDF = async (pdfPath) => {
         throw new Error('Failed to extract text from PDF');
     }
 };
+
+// Function to extract text from DOCX
+const extractFromDOCX = async (filePath)=>  {
+    const data = await mammoth.extractRawText({ path: filePath });
+    return data.value;
+}
+
+// Function to extract text from other formats (DOC, PPT, PPTX)
+const extractFromOtherFormats = async (filePath)=> {
+    return new Promise((resolve, reject) => {
+        textract.fromFileWithPath(filePath, (error, text) => {
+            if (error) {
+                reject(error);
+            } else {
+                resolve(text);
+            }
+        });
+    });
+}
+
+const extractText = async (filePath) => {
+    const ext = path.extname(filePath).toLowerCase();
+    try {
+        if (ext === '.pdf') {
+            return await extractTextFromPDF(filePath);
+        } else if (ext === '.docx') {
+            return await extractFromDOCX(filePath);
+        } else if (ext === '.doc' || ext === '.ppt' || ext === '.pptx') {
+            return await extractFromOtherFormats(filePath);
+        } else {
+            throw new Error('Unsupported file format');
+        }
+    } catch (error) {
+        throw new Error(`Error extracting text: ${error.message}`);
+    }
+}
 
 const textSplitter = async (textDict, chunk_size = 6000, overlap = 500) => {
     const finalChunks = []
@@ -180,7 +218,7 @@ const cosineSimilarity = (vecA, vecB) => {
     return dotProduct / (normA * normB);
 };
 
-const fetchTopK = async (queryEmbedding, topK) => {
+const fetchTopK = async (queryEmbedding, topK,minSimmilarity) => {
 
     const filePath = './vectorChunks.json';
     vectorIndexes = await readJson(filePath);
@@ -188,11 +226,13 @@ const fetchTopK = async (queryEmbedding, topK) => {
         throw new Error('Failed to open vectore indexes!');
     }
 
-    const results = vectorIndexes.map(item => {
-        // console.log("item",item);
-        const similarity = cosineSimilarity(queryEmbedding, item.embedding);
-        return { filename: item.filename, text: item.text, similarity };
-    });
+    const results = vectorIndexes
+        .filter(item => cosineSimilarity(queryEmbedding, item.embedding) > minSimmilarity)
+        .map(item => ({
+            filename: item.filename,
+            text: item.text,
+            similarity: cosineSimilarity(queryEmbedding, item.embedding),
+    }));
 
     // Sort by similarity in descending order
     results.sort((a, b) => b.similarity - a.similarity);
@@ -261,4 +301,4 @@ const generateSummary = async (textData) => {
     return summary;
 }
 
-module.exports = { extractTextFromPDF, textSplitter, deleteFolderFiles, uploadTextToPinceCone, saveLocalJson, fetchTopK, embedAzureOpenAI, answerUserQuery, generateSummary }
+module.exports = { extractTextFromPDF, textSplitter, deleteFolderFiles, uploadTextToPinceCone, saveLocalJson, fetchTopK, embedAzureOpenAI, answerUserQuery, generateSummary, extractText }

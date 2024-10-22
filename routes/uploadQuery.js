@@ -18,6 +18,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 router.route("/query").post(RAGchatbot);
-router.route("/uploadpdf").post(upload.array('pdfFiles', 5),uploadUserFile);
+router.route("/uploadpdf").post(upload.array('files', 5),uploadUserFile);
 
 module.exports = router;
