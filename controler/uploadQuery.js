@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { extractText, textSplitter, deleteFolderFiles, embedAzureOpenAI, answerUserQuery, generateSummary, rephraseQuestion } = require('../utils/textHandler')
-const { createVectors,fetchTopKDocuments } = require("../utils/mongoDBHelper")
+const { createVectors, fetchTopKDocuments } = require("../utils/mongoDBHelper")
 
 
 // const {fetchTopKPinecone,upsertEmbeddingsPinecone} = require('../utils/pineConeHelper')
@@ -15,18 +15,15 @@ const RAGchatbot = async (req, res) => {
     if (!question) {
         return res.status(400).json({ error: "Cannot have a null question." })
     }
-    if(history.length !== 0){
-        let resp = await rephraseQuestion(history,question);
+    if (history.length !== 0) {
+        let resp = await rephraseQuestion(history, question);
         question = resp.question;
-        console.log("question",question,resp)
+        console.log("question", question, resp)
     }
     queryEmbedding = await embedAzureOpenAI(question);
 
-    // const topKChunks = await fetchTopK(queryEmbedding, topK = 10,minSimmilarity=0.7);
-    const topKChunks = await fetchTopKDocuments(brainId,queryEmbedding,similarityCutoff =  0.7, topK = 10)
-    // console.log(topKChunks)
-    // topKChunks = await fetchTopKPinecone(queryEmbedding, topK = 10,similarityCut=0.7);
-    
+    const topKChunks = await fetchTopKDocuments(brainId, queryEmbedding, similarityCutoff = 0.7, topK = 10)
+
     const { answer, filenames, topChunks } = await answerUserQuery(question, topKChunks);
     // console.log(`User Request Question : ${question}`)
     res.send({
@@ -57,7 +54,7 @@ const uploadUserFile = async (req, res) => {
             // Store original filename and create a new file path
             const originalFilename = file.originalname; // This retains the original filename
             const filePath = path.join(__dirname, '../uploads/', originalFilename);
-            
+
             console.log(`Started process for File ${filePath}`)
 
             // Move the uploaded file to the desired location with the original name
@@ -74,26 +71,22 @@ const uploadUserFile = async (req, res) => {
 
         const chunks = await textSplitter(fileContents, 6000, 500);
         console.log("Text Chunks Created!")
-        
-        for(const chunk of chunks){
+
+        for (const chunk of chunks) {
             let vector = {
-                brain_name : brainName,
-                brain_id : brainId,
-                filename : chunk.metadata.filename,
-                text : chunk.pageContent,
-                embedding : await embedAzureOpenAI(chunk.pageContent)
+                brain_name: brainName,
+                brain_id: brainId,
+                filename: chunk.metadata.filename,
+                text: chunk.pageContent,
+                embedding: await embedAzureOpenAI(chunk.pageContent)
             };
             await createVectors(vector);
         }
         console.log("Vectors Created in DB!")
 
-        // console.log("finalChunks[",chunks[0]);
-        // await saveLocalJson(chunks);
-        // await upsertEmbeddingsPinecone(chunks);
-        
         await deleteFolderFiles(path.join(__dirname, '../uploads/'));
         console.log('Files Deleted Successfully');
-        res.status(200).json({ message: 'Files processed Succesfully!', summaries:fileSummaries, chunks: chunks });
+        res.status(200).json({ message: 'Files processed Succesfully!', summaries: fileSummaries, chunks: chunks });
 
     } catch (error) {
         console.error('Error processing files:', error);

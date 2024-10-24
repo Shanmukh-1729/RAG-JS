@@ -26,13 +26,13 @@ const extractTextFromPDF = async (pdfPath) => {
 };
 
 // Function to extract text from DOCX
-const extractFromDOCX = async (filePath)=>  {
+const extractFromDOCX = async (filePath) => {
     const data = await mammoth.extractRawText({ path: filePath });
     return data.value;
 }
 
 // Function to extract text from other formats (DOC, PPT, PPTX)
-const extractFromOtherFormats = async (filePath)=> {
+const extractFromOtherFormats = async (filePath) => {
     return new Promise((resolve, reject) => {
         textract.fromFileWithPath(filePath, (error, text) => {
             if (error) {
@@ -190,7 +190,7 @@ const rephraseQuestion = async (history, question) => {
 
     // Match the JSON part of the string
     const match = modelResp.match(regex);
-    
+
     if (match) {
         try {
             // Extract the JSON string and parse it
