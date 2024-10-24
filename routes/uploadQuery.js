@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
-
+const bodyParser = require('body-parser');
 const multer = require('multer');
 const path = require('path');
 const { RAGchatbot, uploadUserFile } = require('../controler/uploadQuery');
+
+
+router.use(bodyParser.json()); // To parse JSON bodies
 
 // Define multer storage and file handling
 const storage = multer.diskStorage({
